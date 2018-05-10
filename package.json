@@ -1,0 +1,12 @@
+{
+  "name": "edi-docs",
+  "version": "0.1.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vuepress dev",
+    "build": "vuepress build"
+  },
+  "devDependencies": {
+    "vuepress": "^0.8.4"
+  }
+}

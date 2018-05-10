@@ -1,0 +1,94 @@
+# Javascript Node CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-javascript/ for more details
+#
+version: 2
+
+defaults: &defaults
+  working_directory: ~/repo
+  docker:
+    - image: circleci/node:latest
+
+env: &env
+  run:
+    name: set environment variables
+    command: |
+      echo export\ MERGE_PR_NUMBER=$(git log --oneline --merges --pretty=format:"%s" --grep="Merge pull request" -n 1 ${CIRCLE_SHA1} | sed 's/from.*//' | sed -e 's/.*[^0-9]\([0-9]\+\)[^0-9]*$/\1/') >> $BASH_ENV
+      echo export\ COMMIT_MSG=\"$(git log --oneline --pretty=format:"%s" -n 1 $CIRCLE_SHA1)\" >> $BASH_ENV
+
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "package.json" }}
+          # fallback to using the latest cache if no exact match is found
+          - v1-dependencies-
+      - run: yarn add vuepress
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+        
+      # build
+      - run: yarn build
+      - persist_to_workspace:
+          root: ~/repo
+          paths:
+            - .vuepress/dist
+
+  deploy-github:
+      <<: *defaults
+      - attach_workspace:
+          at: ~/repo
+      steps:
+        - <<: *env
+        - run:
+            name: Deploy to edi-things.github.io
+            command: |
+              cd .vuepress/dist
+              git init
+              git add -A
+              git commit -m 'deploy'
+              git push -f git@github.com:edi-things/edi-things.github.io.git master
+
+  deploy-surge:
+      <<: *defaults
+      - attach_workspace:
+          at: ~/repo
+      steps:
+        - <<: *env
+        - run: yarn add global surge
+        - run: surge .vuepress/dist --domain ${CIRCLE_PROJECT_REPONAME}$CIRCLE_PR_NUMBER.surge.sh
+        - run: 
+            name: teardown preview docs if it is merged PR
+            command: |
+              if [[ $MERGE_PR_NUMBER ]]; then
+                surge teardown ${CIRCLE_PROJECT_REPONAME}$MERGE_PR_NUMBER.surge.sh;
+              fi
+
+workflows:
+  version: 2
+  publish-docs:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+
+      - deploy-github:
+          filters:
+            branches:
+              ignore: /pull\/.*/
+            tags:
+              only: /.*/
+          requires:
+            - build
+
+      - deploy-surge:
+          requires:
+            - build
