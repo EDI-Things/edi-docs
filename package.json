@@ -1,5 +1,7 @@
 {
   "name": "edi-docs",
+  "description": "EDI documentation page",
+  "repository": "github:edi-things/edi-docs",
   "version": "0.1.0",
   "license": "MIT",
   "scripts": {
